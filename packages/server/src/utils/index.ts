@@ -182,6 +182,7 @@ export const buildLangchain = async (
     depthQueue: IDepthQueue,
     componentNodes: IComponentNodes,
     question: string,
+    chatId: string,
     overrideConfig?: ICommonObject
 ) => {
     const flowNodes = cloneDeep(reactFlowNodes)
@@ -214,7 +215,7 @@ export const buildLangchain = async (
             if (overrideConfig) flowNodeData = replaceInputsWithConfig(flowNodeData, overrideConfig)
             const reactFlowNodeData: INodeData = resolveVariables(flowNodeData, flowNodes, question)
 
-            flowNodes[nodeIndex].data.instance = await newNodeInstance.init(reactFlowNodeData, question)
+            flowNodes[nodeIndex].data.instance = await newNodeInstance.init(reactFlowNodeData, question, { chatId })
         } catch (e: any) {
             console.error(e)
             throw new Error(e)
@@ -657,5 +658,10 @@ export const isFlowValidForStream = (reactFlowNodes: IReactFlowNode[], endingNod
         }
     }
 
-    return isChatOrLLMsExist && endingNodeData.category === 'Chains' && !isVectorStoreFaiss(endingNodeData)
+    return (
+        isChatOrLLMsExist &&
+        (endingNodeData.category === 'Chains' || endingNodeData.name === 'openAIFunctionAgent') &&
+        !isVectorStoreFaiss(endingNodeData) &&
+        process.env.EXECUTION_MODE !== 'child'
+    )
 }

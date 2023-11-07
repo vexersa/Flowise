@@ -2,10 +2,13 @@ import { INode, INodeData, INodeParams } from '../../../src/Interface'
 import { getBaseClasses } from '../../../src/utils'
 import { OpenAIChat } from 'langchain/llms/openai'
 import { OpenAIChatInput } from 'langchain/chat_models/openai'
+import { BaseCache } from 'langchain/schema'
+import { BaseLLMParams } from 'langchain/llms/base'
 
 class ChatLocalAI_ChatModels implements INode {
     label: string
     name: string
+    version: number
     type: string
     icon: string
     category: string
@@ -16,12 +19,19 @@ class ChatLocalAI_ChatModels implements INode {
     constructor() {
         this.label = 'ChatLocalAI'
         this.name = 'chatLocalAI'
+        this.version = 2.0
         this.type = 'ChatLocalAI'
         this.icon = 'localai.png'
         this.category = 'Chat Models'
         this.description = 'Use local LLMs like llama.cpp, gpt4all using LocalAI'
         this.baseClasses = [this.type, 'BaseChatModel', ...getBaseClasses(OpenAIChat)]
         this.inputs = [
+            {
+                label: 'Cache',
+                name: 'cache',
+                type: 'BaseCache',
+                optional: true
+            },
             {
                 label: 'Base Path',
                 name: 'basePath',
@@ -38,6 +48,7 @@ class ChatLocalAI_ChatModels implements INode {
                 label: 'Temperature',
                 name: 'temperature',
                 type: 'number',
+                step: 0.1,
                 default: 0.9,
                 optional: true
             },
@@ -45,6 +56,7 @@ class ChatLocalAI_ChatModels implements INode {
                 label: 'Max Tokens',
                 name: 'maxTokens',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             },
@@ -52,6 +64,7 @@ class ChatLocalAI_ChatModels implements INode {
                 label: 'Top Probability',
                 name: 'topP',
                 type: 'number',
+                step: 0.1,
                 optional: true,
                 additionalParams: true
             },
@@ -59,6 +72,7 @@ class ChatLocalAI_ChatModels implements INode {
                 label: 'Timeout',
                 name: 'timeout',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             }
@@ -72,16 +86,18 @@ class ChatLocalAI_ChatModels implements INode {
         const topP = nodeData.inputs?.topP as string
         const timeout = nodeData.inputs?.timeout as string
         const basePath = nodeData.inputs?.basePath as string
+        const cache = nodeData.inputs?.cache as BaseCache
 
-        const obj: Partial<OpenAIChatInput> & { openAIApiKey?: string } = {
+        const obj: Partial<OpenAIChatInput> & BaseLLMParams & { openAIApiKey?: string } = {
             temperature: parseFloat(temperature),
             modelName,
             openAIApiKey: 'sk-'
         }
 
         if (maxTokens) obj.maxTokens = parseInt(maxTokens, 10)
-        if (topP) obj.topP = parseInt(topP, 10)
+        if (topP) obj.topP = parseFloat(topP)
         if (timeout) obj.timeout = parseInt(timeout, 10)
+        if (cache) obj.cache = cache
 
         const model = new OpenAIChat(obj, { basePath })
 

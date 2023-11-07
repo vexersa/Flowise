@@ -1,11 +1,12 @@
 import { INode, INodeData, INodeParams } from '../../../src/Interface'
 import { BabyAGI } from './core'
 import { BaseChatModel } from 'langchain/chat_models/base'
-import { VectorStore } from 'langchain/vectorstores'
+import { VectorStore } from 'langchain/vectorstores/base'
 
 class BabyAGI_Agents implements INode {
     label: string
     name: string
+    version: number
     description: string
     type: string
     icon: string
@@ -16,6 +17,7 @@ class BabyAGI_Agents implements INode {
     constructor() {
         this.label = 'BabyAGI'
         this.name = 'babyAGI'
+        this.version = 1.0
         this.type = 'BabyAGI'
         this.category = 'Agents'
         this.icon = 'babyagi.jpg'

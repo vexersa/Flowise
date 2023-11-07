@@ -5,6 +5,7 @@ import { CharacterTextSplitter, CharacterTextSplitterParams } from 'langchain/te
 class CharacterTextSplitter_TextSplitters implements INode {
     label: string
     name: string
+    version: number
     description: string
     type: string
     icon: string
@@ -15,18 +16,13 @@ class CharacterTextSplitter_TextSplitters implements INode {
     constructor() {
         this.label = 'Character Text Splitter'
         this.name = 'characterTextSplitter'
+        this.version = 1.0
         this.type = 'CharacterTextSplitter'
         this.icon = 'textsplitter.svg'
         this.category = 'Text Splitters'
         this.description = `splits only on one type of character (defaults to "\\n\\n").`
         this.baseClasses = [this.type, ...getBaseClasses(CharacterTextSplitter)]
         this.inputs = [
-            {
-                label: 'Separator',
-                name: 'separator',
-                type: 'string',
-                optional: true
-            },
             {
                 label: 'Chunk Size',
                 name: 'chunkSize',
@@ -38,6 +34,14 @@ class CharacterTextSplitter_TextSplitters implements INode {
                 label: 'Chunk Overlap',
                 name: 'chunkOverlap',
                 type: 'number',
+                optional: true
+            },
+            {
+                label: 'Custom Separator',
+                name: 'separator',
+                type: 'string',
+                placeholder: `" "`,
+                description: 'Separator to determine when to split the text, will override the default separator',
                 optional: true
             }
         ]

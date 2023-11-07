@@ -28,6 +28,10 @@ import useApi from 'hooks/useApi'
 // Const
 import { baseURL, maxScroll } from 'store/constant'
 
+import robotPNG from 'assets/images/robot.png'
+import userPNG from 'assets/images/account.png'
+import { isValidURL, removeDuplicateURL } from 'utils/genericHelper'
+
 export const ChatMessage = ({ open, chatflowid, isDialog }) => {
     const theme = useTheme()
     const customization = useSelector((state) => state.customization)
@@ -46,14 +50,19 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
     const [isChatFlowAvailableToStream, setIsChatFlowAvailableToStream] = useState(false)
     const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
     const [sourceDialogProps, setSourceDialogProps] = useState({})
+    const [chatId, setChatId] = useState(undefined)
 
     const inputRef = useRef(null)
-    const getChatmessageApi = useApi(chatmessageApi.getChatmessageFromChatflow)
+    const getChatmessageApi = useApi(chatmessageApi.getInternalChatmessageFromChatflow)
     const getIsChatflowStreamingApi = useApi(chatflowsApi.getIsChatflowStreaming)
 
     const onSourceDialogClick = (data) => {
         setSourceDialogProps({ data })
         setSourceDialogOpen(true)
+    }
+
+    const onURLClick = (data) => {
+        window.open(data, '_blank')
     }
 
     const scrollToBottom = () => {
@@ -63,20 +72,6 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
     }
 
     const onChange = useCallback((e) => setUserInput(e.target.value), [setUserInput])
-
-    const addChatMessage = async (message, type, sourceDocuments) => {
-        try {
-            const newChatMessageBody = {
-                role: type,
-                content: message,
-                chatflowid: chatflowid
-            }
-            if (sourceDocuments) newChatMessageBody.sourceDocuments = JSON.stringify(sourceDocuments)
-            await chatmessageApi.createNewChatmessage(chatflowid, newChatMessageBody)
-        } catch (error) {
-            console.error(error)
-        }
-    }
 
     const updateLastMessage = (text) => {
         setMessages((prevMessages) => {
@@ -100,7 +95,6 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
     const handleError = (message = 'Oops! There seems to be an error. Please try again.') => {
         message = message.replace(`Unable to parse JSON response from chat agent.\n\n`, '')
         setMessages((prevMessages) => [...prevMessages, { message, type: 'apiMessage' }])
-        addChatMessage(message, 'apiMessage')
         setLoading(false)
         setUserInput('')
         setTimeout(() => {
@@ -118,14 +112,13 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
 
         setLoading(true)
         setMessages((prevMessages) => [...prevMessages, { message: userInput, type: 'userMessage' }])
-        // waiting for first chatmessage saved, the first chatmessage will be used in sendMessageAndGetPrediction
-        await addChatMessage(userInput, 'userMessage')
 
         // Send user question and history to API
         try {
             const params = {
                 question: userInput,
-                history: messages.filter((msg) => msg.message !== 'Hi there! How can I help?')
+                history: messages.filter((msg) => msg.message !== 'Hi there! How can I help?'),
+                chatId
             }
             if (isChatFlowAvailableToStream) params.socketIOClientId = socketIOClientId
 
@@ -133,20 +126,22 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
 
             if (response.data) {
                 const data = response.data
-                if (typeof data === 'object' && data.text && data.sourceDocuments) {
-                    if (!isChatFlowAvailableToStream) {
-                        setMessages((prevMessages) => [
-                            ...prevMessages,
-                            { message: data.text, sourceDocuments: data.sourceDocuments, type: 'apiMessage' }
-                        ])
-                    }
-                    addChatMessage(data.text, 'apiMessage', data.sourceDocuments)
-                } else {
-                    if (!isChatFlowAvailableToStream) {
-                        setMessages((prevMessages) => [...prevMessages, { message: data, type: 'apiMessage' }])
-                    }
-                    addChatMessage(data, 'apiMessage')
+                if (!chatId) {
+                    setChatId(data.chatId)
+                    localStorage.setItem(`${chatflowid}_INTERNAL`, data.chatId)
                 }
+                if (!isChatFlowAvailableToStream) {
+                    let text = ''
+                    if (data.text) text = data.text
+                    else if (data.json) text = '```json\n' + JSON.stringify(data.json, null, 2)
+                    else text = JSON.stringify(data, null, 2)
+
+                    setMessages((prevMessages) => [
+                        ...prevMessages,
+                        { message: text, sourceDocuments: data?.sourceDocuments, type: 'apiMessage' }
+                    ])
+                }
+
                 setLoading(false)
                 setUserInput('')
                 setTimeout(() => {
@@ -176,16 +171,18 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
 
     // Get chatmessages successful
     useEffect(() => {
-        if (getChatmessageApi.data) {
-            const loadedMessages = []
-            for (const message of getChatmessageApi.data) {
+        if (getChatmessageApi.data?.length) {
+            const chatId = getChatmessageApi.data[0]?.chatId
+            setChatId(chatId)
+            localStorage.setItem(`${chatflowid}_INTERNAL`, chatId)
+            const loadedMessages = getChatmessageApi.data.map((message) => {
                 const obj = {
                     message: message.content,
                     type: message.role
                 }
                 if (message.sourceDocuments) obj.sourceDocuments = JSON.parse(message.sourceDocuments)
-                loadedMessages.push(obj)
-            }
+                return obj
+            })
             setMessages((prevMessages) => [...prevMessages, ...loadedMessages])
         }
 
@@ -281,21 +278,9 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
                                     >
                                         {/* Display the correct icon depending on the message type */}
                                         {message.type === 'apiMessage' ? (
-                                            <img
-                                                src='https://raw.githubusercontent.com/zahidkhawaja/langchain-chat-nextjs/main/public/parroticon.png'
-                                                alt='AI'
-                                                width='30'
-                                                height='30'
-                                                className='boticon'
-                                            />
+                                            <img src={robotPNG} alt='AI' width='30' height='30' className='boticon' />
                                         ) : (
-                                            <img
-                                                src='https://raw.githubusercontent.com/zahidkhawaja/langchain-chat-nextjs/main/public/usericon.png'
-                                                alt='Me'
-                                                width='30'
-                                                height='30'
-                                                className='usericon'
-                                            />
+                                            <img src={userPNG} alt='Me' width='30' height='30' className='usericon' />
                                         )}
                                         <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                                             <div className='markdownanswer'>
@@ -328,17 +313,26 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
                                             </div>
                                             {message.sourceDocuments && (
                                                 <div style={{ display: 'block', flexDirection: 'row', width: '100%' }}>
-                                                    {message.sourceDocuments.map((source, index) => {
+                                                    {removeDuplicateURL(message).map((source, index) => {
+                                                        const URL = isValidURL(source.metadata.source)
                                                         return (
                                                             <Chip
                                                                 size='small'
                                                                 key={index}
-                                                                label={`${source.pageContent.substring(0, 15)}...`}
+                                                                label={
+                                                                    URL
+                                                                        ? URL.pathname.substring(0, 15) === '/'
+                                                                            ? URL.host
+                                                                            : `${URL.pathname.substring(0, 15)}...`
+                                                                        : `${source.pageContent.substring(0, 15)}...`
+                                                                }
                                                                 component='a'
                                                                 sx={{ mr: 1, mb: 1 }}
                                                                 variant='outlined'
                                                                 clickable
-                                                                onClick={() => onSourceDialogClick(source)}
+                                                                onClick={() =>
+                                                                    URL ? onURLClick(source.metadata.source) : onSourceDialogClick(source)
+                                                                }
                                                             />
                                                         )
                                                     })}
@@ -368,6 +362,7 @@ export const ChatMessage = ({ open, chatflowid, isDialog }) => {
                             value={userInput}
                             onChange={onChange}
                             multiline={true}
+                            maxRows={isDialog ? 7 : 2}
                             endAdornment={
                                 <InputAdornment position='end' sx={{ padding: '15px' }}>
                                     <IconButton type='submit' disabled={loading || !chatflowid} edge='end'>

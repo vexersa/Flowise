@@ -80,6 +80,9 @@ export default function themePalette(theme) {
         asyncSelect: {
             main: theme.customization.isDarkMode ? theme.colors?.darkPrimary800 : theme.colors?.grey50
         },
+        timeMessage: {
+            main: theme.customization.isDarkMode ? theme.colors?.darkLevel2 : theme.colors?.grey200
+        },
         canvasHeader: {
             deployLight: theme.colors?.primaryLight,
             deployDark: theme.colors?.primaryDark,
@@ -90,6 +93,10 @@ export default function themePalette(theme) {
         },
         codeEditor: {
             main: theme.customization.isDarkMode ? theme.colors?.darkPrimary800 : theme.colors?.primaryLight
+        },
+        nodeToolTip: {
+            background: theme.customization.isDarkMode ? theme.colors?.darkPrimary800 : theme.colors?.paper,
+            color: theme.customization.isDarkMode ? theme.colors?.paper : 'rgba(0, 0, 0, 0.87)'
         }
     }
 }

@@ -39,8 +39,23 @@ export const initNode = (nodeData, newNodeId) => {
     const incoming = nodeData.inputs ? nodeData.inputs.length : 0
     const outgoing = 1
 
-    const whitelistTypes = ['asyncOptions', 'options', 'string', 'number', 'boolean', 'password', 'json', 'code', 'date', 'file', 'folder']
+    const whitelistTypes = [
+        'asyncOptions',
+        'options',
+        'multiOptions',
+        'datagrid',
+        'string',
+        'number',
+        'boolean',
+        'password',
+        'json',
+        'code',
+        'date',
+        'file',
+        'folder'
+    ]
 
+    // Inputs
     for (let i = 0; i < incoming; i += 1) {
         const newInput = {
             ...nodeData.inputs[i],
@@ -53,6 +68,16 @@ export const initNode = (nodeData, newNodeId) => {
         }
     }
 
+    // Credential
+    if (nodeData.credential) {
+        const newInput = {
+            ...nodeData.credential,
+            id: `${newNodeId}-input-${nodeData.credential.name}-${nodeData.credential.type}`
+        }
+        inputParams.unshift(newInput)
+    }
+
+    // Outputs
     const outputAnchors = []
     for (let i = 0; i < outgoing; i += 1) {
         if (nodeData.outputs && nodeData.outputs.length) {
@@ -129,6 +154,8 @@ export const initNode = (nodeData, newNodeId) => {
             }
         ]
     */
+
+    // Inputs
     if (nodeData.inputs) {
         nodeData.inputAnchors = inputAnchors
         nodeData.inputParams = inputParams
@@ -139,13 +166,17 @@ export const initNode = (nodeData, newNodeId) => {
         nodeData.inputs = {}
     }
 
+    // Outputs
     if (nodeData.outputs) {
         nodeData.outputs = initializeDefaultNodeData(outputAnchors)
     } else {
         nodeData.outputs = {}
     }
-
     nodeData.outputAnchors = outputAnchors
+
+    // Credential
+    if (nodeData.credential) nodeData.credential = ''
+
     nodeData.id = newNodeId
 
     return nodeData
@@ -168,8 +199,10 @@ export const isValidConnection = (connection, reactFlowInstance) => {
     //sourceHandle: "llmChain_0-output-llmChain-BaseChain"
     //targetHandle: "mrlkAgentLLM_0-input-model-BaseLanguageModel"
 
-    const sourceTypes = sourceHandle.split('-')[sourceHandle.split('-').length - 1].split('|')
-    const targetTypes = targetHandle.split('-')[targetHandle.split('-').length - 1].split('|')
+    let sourceTypes = sourceHandle.split('-')[sourceHandle.split('-').length - 1].split('|')
+    sourceTypes = sourceTypes.map((s) => s.trim())
+    let targetTypes = targetHandle.split('-')[targetHandle.split('-').length - 1].split('|')
+    targetTypes = targetTypes.map((t) => t.trim())
 
     if (targetTypes.some((t) => sourceTypes.includes(t))) {
         let targetNode = reactFlowInstance.getNode(target)
@@ -249,6 +282,7 @@ export const generateExportFlowData = (flowData) => {
         const newNodeData = {
             id: node.data.id,
             label: node.data.label,
+            version: node.data.version,
             name: node.data.name,
             type: node.data.type,
             baseClasses: node.data.baseClasses,
@@ -380,4 +414,43 @@ export const getInputVariables = (paramValue) => {
         startIdx += 1
     }
     return inputVariables
+}
+
+export const removeDuplicateURL = (message) => {
+    const visitedURLs = []
+    const newSourceDocuments = []
+
+    if (!message.sourceDocuments) return newSourceDocuments
+
+    message.sourceDocuments.forEach((source) => {
+        if (isValidURL(source.metadata.source) && !visitedURLs.includes(source.metadata.source)) {
+            visitedURLs.push(source.metadata.source)
+            newSourceDocuments.push(source)
+        } else if (!isValidURL(source.metadata.source)) {
+            newSourceDocuments.push(source)
+        }
+    })
+    return newSourceDocuments
+}
+
+export const isValidURL = (url) => {
+    try {
+        return new URL(url)
+    } catch (err) {
+        return undefined
+    }
+}
+
+export const formatDataGridRows = (rows) => {
+    try {
+        const parsedRows = typeof rows === 'string' ? JSON.parse(rows) : rows
+        return parsedRows.map((sch, index) => {
+            return {
+                ...sch,
+                id: index
+            }
+        })
+    } catch (e) {
+        return []
+    }
 }

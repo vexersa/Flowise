@@ -1,14 +1,15 @@
-import { ICommonObject, IMessage, INode, INodeData, INodeParams } from '../../../src/Interface'
+import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
 import { initializeAgentExecutorWithOptions, AgentExecutor } from 'langchain/agents'
-import { CustomChainHandler, getBaseClasses } from '../../../src/utils'
+import { getBaseClasses, mapChatHistory } from '../../../src/utils'
 import { BaseLanguageModel } from 'langchain/base_language'
 import { flatten } from 'lodash'
-import { BaseChatMemory, ChatMessageHistory } from 'langchain/memory'
-import { AIChatMessage, HumanChatMessage } from 'langchain/schema'
+import { BaseChatMemory } from 'langchain/memory'
+import { ConsoleCallbackHandler, CustomChainHandler, additionalCallbacks } from '../../../src/handler'
 
 class OpenAIFunctionAgent_Agents implements INode {
     label: string
     name: string
+    version: number
     description: string
     type: string
     icon: string
@@ -19,6 +20,7 @@ class OpenAIFunctionAgent_Agents implements INode {
     constructor() {
         this.label = 'OpenAI Function Agent'
         this.name = 'openAIFunctionAgent'
+        this.version = 1.0
         this.type = 'AgentExecutor'
         this.category = 'Agents'
         this.icon = 'openai.png'
@@ -79,26 +81,23 @@ class OpenAIFunctionAgent_Agents implements INode {
         const memory = nodeData.inputs?.memory as BaseChatMemory
 
         if (options && options.chatHistory) {
-            const chatHistory = []
-            const histories: IMessage[] = options.chatHistory
-
-            for (const message of histories) {
-                if (message.type === 'apiMessage') {
-                    chatHistory.push(new AIChatMessage(message.message))
-                } else if (message.type === 'userMessage') {
-                    chatHistory.push(new HumanChatMessage(message.message))
-                }
+            const chatHistoryClassName = memory.chatHistory.constructor.name
+            // Only replace when its In-Memory
+            if (chatHistoryClassName && chatHistoryClassName === 'ChatMessageHistory') {
+                memory.chatHistory = mapChatHistory(options)
+                executor.memory = memory
             }
-            memory.chatHistory = new ChatMessageHistory(chatHistory)
-            executor.memory = memory
         }
+
+        const loggerHandler = new ConsoleCallbackHandler(options.logger)
+        const callbacks = await additionalCallbacks(nodeData, options)
 
         if (options.socketIO && options.socketIOClientId) {
             const handler = new CustomChainHandler(options.socketIO, options.socketIOClientId)
-            const result = await executor.run(input, [handler])
+            const result = await executor.run(input, [loggerHandler, handler, ...callbacks])
             return result
         } else {
-            const result = await executor.run(input)
+            const result = await executor.run(input, [loggerHandler, ...callbacks])
             return result
         }
     }

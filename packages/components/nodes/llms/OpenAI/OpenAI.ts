@@ -1,30 +1,42 @@
-import { INode, INodeData, INodeParams } from '../../../src/Interface'
-import { getBaseClasses } from '../../../src/utils'
+import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
+import { getBaseClasses, getCredentialData, getCredentialParam } from '../../../src/utils'
 import { OpenAI, OpenAIInput } from 'langchain/llms/openai'
+import { BaseLLMParams } from 'langchain/llms/base'
+import { BaseCache } from 'langchain/schema'
 
 class OpenAI_LLMs implements INode {
     label: string
     name: string
+    version: number
     type: string
     icon: string
     category: string
     description: string
     baseClasses: string[]
+    credential: INodeParams
     inputs: INodeParams[]
 
     constructor() {
         this.label = 'OpenAI'
         this.name = 'openAI'
+        this.version = 3.0
         this.type = 'OpenAI'
         this.icon = 'openai.png'
         this.category = 'LLMs'
         this.description = 'Wrapper around OpenAI large language models'
         this.baseClasses = [this.type, ...getBaseClasses(OpenAI)]
+        this.credential = {
+            label: 'Connect Credential',
+            name: 'credential',
+            type: 'credential',
+            credentialNames: ['openAIApi']
+        }
         this.inputs = [
             {
-                label: 'OpenAI Api Key',
-                name: 'openAIApiKey',
-                type: 'password'
+                label: 'Cache',
+                name: 'cache',
+                type: 'BaseCache',
+                optional: true
             },
             {
                 label: 'Model Name',
@@ -32,29 +44,26 @@ class OpenAI_LLMs implements INode {
                 type: 'options',
                 options: [
                     {
-                        label: 'text-davinci-003',
-                        name: 'text-davinci-003'
+                        label: 'gpt-3.5-turbo-instruct',
+                        name: 'gpt-3.5-turbo-instruct'
                     },
                     {
-                        label: 'text-davinci-002',
-                        name: 'text-davinci-002'
+                        label: 'babbage-002',
+                        name: 'babbage-002'
                     },
                     {
-                        label: 'text-curie-001',
-                        name: 'text-curie-001'
-                    },
-                    {
-                        label: 'text-babbage-001',
-                        name: 'text-babbage-001'
+                        label: 'davinci-002',
+                        name: 'davinci-002'
                     }
                 ],
-                default: 'text-davinci-003',
+                default: 'gpt-3.5-turbo-instruct',
                 optional: true
             },
             {
                 label: 'Temperature',
                 name: 'temperature',
                 type: 'number',
+                step: 0.1,
                 default: 0.7,
                 optional: true
             },
@@ -62,6 +71,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Max Tokens',
                 name: 'maxTokens',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             },
@@ -69,6 +79,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Top Probability',
                 name: 'topP',
                 type: 'number',
+                step: 0.1,
                 optional: true,
                 additionalParams: true
             },
@@ -76,6 +87,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Best Of',
                 name: 'bestOf',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             },
@@ -83,6 +95,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Frequency Penalty',
                 name: 'frequencyPenalty',
                 type: 'number',
+                step: 0.1,
                 optional: true,
                 additionalParams: true
             },
@@ -90,6 +103,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Presence Penalty',
                 name: 'presencePenalty',
                 type: 'number',
+                step: 0.1,
                 optional: true,
                 additionalParams: true
             },
@@ -97,6 +111,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Batch Size',
                 name: 'batchSize',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             },
@@ -104,6 +119,7 @@ class OpenAI_LLMs implements INode {
                 label: 'Timeout',
                 name: 'timeout',
                 type: 'number',
+                step: 1,
                 optional: true,
                 additionalParams: true
             },
@@ -113,14 +129,20 @@ class OpenAI_LLMs implements INode {
                 type: 'string',
                 optional: true,
                 additionalParams: true
+            },
+            {
+                label: 'BaseOptions',
+                name: 'baseOptions',
+                type: 'json',
+                optional: true,
+                additionalParams: true
             }
         ]
     }
 
-    async init(nodeData: INodeData): Promise<any> {
+    async init(nodeData: INodeData, _: string, options: ICommonObject): Promise<any> {
         const temperature = nodeData.inputs?.temperature as string
         const modelName = nodeData.inputs?.modelName as string
-        const openAIApiKey = nodeData.inputs?.openAIApiKey as string
         const maxTokens = nodeData.inputs?.maxTokens as string
         const topP = nodeData.inputs?.topP as string
         const frequencyPenalty = nodeData.inputs?.frequencyPenalty as string
@@ -130,8 +152,14 @@ class OpenAI_LLMs implements INode {
         const bestOf = nodeData.inputs?.bestOf as string
         const streaming = nodeData.inputs?.streaming as boolean
         const basePath = nodeData.inputs?.basepath as string
+        const baseOptions = nodeData.inputs?.baseOptions
 
-        const obj: Partial<OpenAIInput> & { openAIApiKey?: string } = {
+        const credentialData = await getCredentialData(nodeData.credential ?? '', options)
+        const openAIApiKey = getCredentialParam('openAIApiKey', credentialData, nodeData)
+
+        const cache = nodeData.inputs?.cache as BaseCache
+
+        const obj: Partial<OpenAIInput> & BaseLLMParams & { openAIApiKey?: string } = {
             temperature: parseFloat(temperature),
             modelName,
             openAIApiKey,
@@ -139,15 +167,27 @@ class OpenAI_LLMs implements INode {
         }
 
         if (maxTokens) obj.maxTokens = parseInt(maxTokens, 10)
-        if (topP) obj.topP = parseInt(topP, 10)
-        if (frequencyPenalty) obj.frequencyPenalty = parseInt(frequencyPenalty, 10)
-        if (presencePenalty) obj.presencePenalty = parseInt(presencePenalty, 10)
+        if (topP) obj.topP = parseFloat(topP)
+        if (frequencyPenalty) obj.frequencyPenalty = parseFloat(frequencyPenalty)
+        if (presencePenalty) obj.presencePenalty = parseFloat(presencePenalty)
         if (timeout) obj.timeout = parseInt(timeout, 10)
         if (batchSize) obj.batchSize = parseInt(batchSize, 10)
         if (bestOf) obj.bestOf = parseInt(bestOf, 10)
 
+        if (cache) obj.cache = cache
+
+        let parsedBaseOptions: any | undefined = undefined
+        if (baseOptions) {
+            try {
+                parsedBaseOptions = typeof baseOptions === 'object' ? baseOptions : JSON.parse(baseOptions)
+            } catch (exception) {
+                throw new Error("Invalid JSON in the OpenAI's BaseOptions: " + exception)
+            }
+        }
+
         const model = new OpenAI(obj, {
-            basePath
+            basePath,
+            baseOptions: parsedBaseOptions
         })
         return model
     }
